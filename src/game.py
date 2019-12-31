@@ -15,6 +15,7 @@ class Game(object):
     CHAR_OF_WALL_FIELD = '#'
 
     def __init__(self, columns, rows, hardocode_mode=False):
+        self.started = False
         self.rows = rows
         self.columns = columns
         self.table = Game.generate_table(self.rows, self.columns)
@@ -38,6 +39,7 @@ class Game(object):
 
     def print(self):
         print(f'Your Score: ({self.points})'.center((self.columns * 2) + 2))
+        print(f'Hardcode Mode: ({self.hardocode_mode})'.center((self.columns * 2) + 2))
         print(self.generate_line_vertical())
         for row in self.table:
             print('|', *row, '|')
@@ -158,6 +160,8 @@ class Game(object):
     def verify_move(self, key):
         name = key.name
 
+        if name == 'enter' and not self.started:
+            self.started = True
         if name == 'right' and self.direction_name != 'left':
             self.change_direction(1, 0)
             self.direction_name = 'right'
@@ -179,13 +183,15 @@ class Game(object):
                 time.sleep(.1)
                 os.system('clear')
 
-                if not self.pause:
+                if self.started:
                     move_x, move_y = self.direction
                     
                     self.move_snake(move_x, move_y)
                     self.print()
-                else:
+                elif self.pause:
                     print(banners.PAUSE)
+                else:
+                    print(banners.START_GAME)
         except Exception as _:
             print(dir(_))
             print(banners.GAME_OVER.format(points=self.points))
