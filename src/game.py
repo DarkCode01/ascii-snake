@@ -3,17 +3,18 @@ import random
 import time
 from pynput import keyboard
 
+from utils import banners
 from src.snake import SnakeHead
 from src.snake import SnakeBody
-from utils.messages_errors import GAME_OVER
 
 
 class Game(object):
     CHAR_OF_BODY_FIELD = '█'
     CHAR_OF_EMPTY_FIELD = ' '
     CHAR_OF_FRUIT_FIELD = '*'
+    CHAR_OF_WALL_FIELD = '#'
 
-    def __init__(self, columns, rows):
+    def __init__(self, columns, rows, hardocode_mode=False):
         self.rows = rows
         self.columns = columns
         self.table = Game.generate_table(self.rows, self.columns)
@@ -23,6 +24,9 @@ class Game(object):
         self.fruit = False
         self.direction_name = 'right'
         self.points = 0
+        self.pause = False
+        self.hardocode_mode = hardocode_mode
+        self.walls_active = False
         
         # Position to put snake on table
         
@@ -64,9 +68,8 @@ class Game(object):
         self.table[self.snake.parts[part].position_y][self.snake.parts[part].position_x] = char
         self.update_position_parts(part + 1, char)
     
-    def add_fruit(self, pos_x, pos_y):
-        self.table[pos_x][pos_y] = self.CHAR_OF_FRUIT_FIELD
-        self.fruit = True
+    def add_object(self, pos_x, pos_y, char):
+        self.table[pos_x][pos_y] = char
 
     def add_new_part(self):
         pos_x, pos_y = self.get_position_by_direction()
@@ -122,7 +125,14 @@ class Game(object):
         self.update_table(self.CHAR_OF_BODY_FIELD)
 
         if not self.fruit:
-            self.generate_random_fruit()
+            self.generate_random_object(self.CHAR_OF_FRUIT_FIELD)
+            self.fruit = True
+        if self.walls_active or self.hardocode_mode and self.points != 0 and (self.points % 2) == 0:
+            self.generate_random_object(self.CHAR_OF_WALL_FIELD)
+            self.walls_active = True
+        
+        if self.points != 0 and (self.points % 2) != 0:
+            self.walls_active = False
     
     def change_direction(self, *directions):
         self.direction = directions
@@ -134,14 +144,16 @@ class Game(object):
             self.add_new_part()
         elif _object == self.CHAR_OF_BODY_FIELD:
             raise Exception()
+        elif _object == self.CHAR_OF_WALL_FIELD:
+            raise Exception()
 
-    def generate_random_fruit(self):
+    def generate_random_object(self, char):
         pos_x, pos_y = self.generate_snake()
 
         if self.table[pos_x][pos_y] == self.CHAR_OF_EMPTY_FIELD:
-           return self.add_fruit(pos_x, pos_y)
+           return self.add_object(pos_x, pos_y, char)
     
-        self.generate_random_fruit()
+        self.generate_random_object(char)
 
     def verify_move(self, key):
         name = key.name
@@ -158,19 +170,25 @@ class Game(object):
         if name == 'down' and self.direction_name != 'up':
             self.change_direction(0, 1)
             self.direction_name = 'down'
+        if name == 'esc':
+            self.pause = not self.pause
 
     def main_loop(self):
         try:
             while True:
-                time.sleep(.5)
+                time.sleep(.1)
                 os.system('clear')
 
-                move_x, move_y = self.direction
-                
-                self.move_snake(move_x, move_y)
-                self.print()
+                if not self.pause:
+                    move_x, move_y = self.direction
+                    
+                    self.move_snake(move_x, move_y)
+                    self.print()
+                else:
+                    print(banners.PAUSE)
         except Exception as _:
-            print(GAME_OVER.format(points=self.points))
+            print(dir(_))
+            print(banners.GAME_OVER.format(points=self.points))
     
     def keyboard_loop(self):
         listener = keyboard.Listener(on_press=self.verify_move)

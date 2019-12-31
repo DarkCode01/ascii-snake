@@ -6,6 +6,6 @@ from src.cli import cli
 
 
 if __name__ == '__main__':
-    weight, heigth = cli()
-    game = Game(weight, heigth)
+    # weight, heigth = cli()
+    game = Game(25, 25, hardocode_mode=True)
     game.run()
