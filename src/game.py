@@ -9,10 +9,11 @@ from src.snake import SnakeBody
 
 
 class Game(object):
-    CHAR_OF_BODY_FIELD = '█'
+    CHAR_OF_BODY_FIELD = '#'
     CHAR_OF_EMPTY_FIELD = ' '
     CHAR_OF_FRUIT_FIELD = '*'
-    CHAR_OF_WALL_FIELD = '#'
+    CHAR_OF_WALL_FIELD = '█'
+    CHAR_OF_BONUS_FIELD = '@'
 
     def __init__(self, columns, rows, hardocode_mode=False):
         self.started = False
@@ -30,7 +31,6 @@ class Game(object):
         self.walls_active = False
         
         # Position to put snake on table
-        
         self.update_table(self.CHAR_OF_BODY_FIELD)
 
     @staticmethod
@@ -40,6 +40,8 @@ class Game(object):
     def print(self):
         print(f'Your Score: ({self.points})'.center((self.columns * 2) + 2))
         print(f'Hardcode Mode: ({self.hardocode_mode})'.center((self.columns * 2) + 2))
+        print('[@] => Bonus Fruit (random point (1, 10))[*] Normal Fruit One point'.center((self.columns * 2) + 2))
+        print('(Esc) => Pause'.center((self.columns * 2) + 2))
         print(self.generate_line_vertical())
         for row in self.table:
             print('|', *row, '|')
@@ -74,22 +76,10 @@ class Game(object):
         self.table[pos_x][pos_y] = char
 
     def add_new_part(self):
-        pos_x, pos_y = self.get_position_by_direction()
-
-        self.snake.parts.append(SnakeBody(pos_x, pos_y))
+        self.snake.parts.append(SnakeBody(self.snake.position_x, self.snake.position_y))
         self.points += 1
         self.fruit = False
-    
-    def get_position_by_direction(self):
-        if self.direction_name == 'right':
-            return (self.snake.position_x - 1, self.snake.position_y)
-        if self.direction_name == 'left':
-            return (self.snake.position_x + 1, self.snake.position_y)
-        if self.direction_name == 'up':
-            return (self.snake.position_x, self.snake.position_y - 1)
-        if self.direction_name == 'down':
-            return (self.snake.position_x, self.snake.position_y + 1)
-    
+
     def change_positions_parts(self, part, last_pos_x, last_pos_y):
         if part > len(self.snake.parts) - 1:
             return None
@@ -127,7 +117,9 @@ class Game(object):
         self.update_table(self.CHAR_OF_BODY_FIELD)
 
         if not self.fruit:
-            self.generate_random_object(self.CHAR_OF_FRUIT_FIELD)
+            char = random.choice((self.CHAR_OF_FRUIT_FIELD, self.CHAR_OF_BONUS_FIELD))
+
+            self.generate_random_object(char)
             self.fruit = True
         if self.walls_active or self.hardocode_mode and self.points != 0 and (self.points % 2) == 0:
             self.generate_random_object(self.CHAR_OF_WALL_FIELD)
@@ -144,6 +136,9 @@ class Game(object):
 
         if _object == self.CHAR_OF_FRUIT_FIELD:
             self.add_new_part()
+        if _object == self.CHAR_OF_BONUS_FIELD:
+            for new_part in range(0, random.randint(1, 10)):
+                self.add_new_part()
         elif _object == self.CHAR_OF_BODY_FIELD:
             raise Exception()
         elif _object == self.CHAR_OF_WALL_FIELD:
@@ -183,7 +178,7 @@ class Game(object):
                 time.sleep(.1)
                 os.system('clear')
 
-                if self.started:
+                if not self.pause and self.started:
                     move_x, move_y = self.direction
                     
                     self.move_snake(move_x, move_y)
@@ -193,7 +188,6 @@ class Game(object):
                 else:
                     print(banners.START_GAME)
         except Exception as _:
-            print(dir(_))
             print(banners.GAME_OVER.format(points=self.points))
     
     def keyboard_loop(self):

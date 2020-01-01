@@ -1,10 +1,4 @@
 def cli():
-    weight = int(input("Please insert weight of the table (default: (25))> "))
-    heigth = int(input("Please insert heigth of the table (default: (25))> "))
+    hardcode_mode = input("Hardcode Mode (yes/no) > ")
 
-    if not weight:
-        weight = 25
-    if not heigth:
-        heigth = 25
-
-    return weight, heigth
+    return True if hardcode_mode.lower() == 'yes' else False
