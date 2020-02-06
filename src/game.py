@@ -1,6 +1,10 @@
 import os
-import random
 import time
+import random
+
+from colorama import Fore
+from colorama import Back
+from colorama import Style
 from pynput import keyboard
 
 from utils import banners
@@ -9,25 +13,31 @@ from src.snake import SnakeBody
 
 
 class Game(object):
-    CHAR_OF_BODY_FIELD = '#'
-    CHAR_OF_EMPTY_FIELD = ' '
-    CHAR_OF_FRUIT_FIELD = '*'
-    CHAR_OF_WALL_FIELD = '█'
-    CHAR_OF_BONUS_FIELD = '@'
+    CHAR_OF_BODY_FIELD = Fore.GREEN + 'o' + Style.RESET_ALL
+    CHAR_OF_EMPTY_FIELD = Fore.BLACK + ' ' + Style.RESET_ALL
+    CHAR_OF_FRUIT_FIELD = Fore.YELLOW + '*' + Style.RESET_ALL
+    CHAR_OF_WALL_FIELD = Fore.YELLOW + '█' + Style.RESET_ALL
+    CHAR_OF_BONUS_FIELD = Fore.YELLOW + '@' + Style.RESET_ALL
 
-    def __init__(self, columns, rows, hardocode_mode=False):
+    LIMIT_OF_BONUS = 100
+
+    def __init__(self, rows, columns, speed=0.075, hardocode_mode=False):
         self.started = False
         self.rows = rows
         self.columns = columns
+        self.hardocode_mode = hardocode_mode
+        self.speed = speed
         self.table = Game.generate_table(self.rows, self.columns)
         position_x, position_y = self.generate_snake()
-        self.snake = SnakeHead(position_x, position_y, [])
         self.direction = (1, 0)
-        self.fruit = False
         self.direction_name = 'right'
+        self.snake = SnakeHead(self.direction_name, position_x, position_y, [])
+        self.fruit = False
         self.points = 0
+        self.bonus = 0
+        self.bonus_time = False
+        self.bar_of_bonus = []
         self.pause = False
-        self.hardocode_mode = hardocode_mode
         self.walls_active = False
         
         # Position to put snake on table
@@ -35,13 +45,23 @@ class Game(object):
 
     @staticmethod
     def generate_table(rows, columns):        
-        return list(([Game.CHAR_OF_EMPTY_FIELD] * columns for row in range(rows)))
+        return list(([Game.CHAR_OF_EMPTY_FIELD] * rows for row in range(columns)))
+
+    def print_header(self):
+        print(f'Your Score: ({self.points})'.center((self.rows * 2) + 2))
+        print(f'Hardcode Mode: ({self.hardocode_mode})'.center((self.rows * 2) + 2))
+        print('[@] => Bonus Fruit (random point (1, 10))[*] Normal Fruit One point'.center((self.rows * 2) + 2))
+        print('(Esc) => Pause'.center((self.rows * 2) + 2))
+        print()
+        print(f'Score of bonus: [{"".join(self.bar_of_bonus)}] {(int((self.bonus / 100) * 100))}%'.center((self.rows * 2) + 2))
+        print()
+
+        if self.bonus >= self.LIMIT_OF_BONUS:
+            print(f'Press [SPACE] to active bonus'.center((self.rows * 2) + 2))
 
     def print(self):
-        print(f'Your Score: ({self.points})'.center((self.columns * 2) + 2))
-        print(f'Hardcode Mode: ({self.hardocode_mode})'.center((self.columns * 2) + 2))
-        print('[@] => Bonus Fruit (random point (1, 10))[*] Normal Fruit One point'.center((self.columns * 2) + 2))
-        print('(Esc) => Pause'.center((self.columns * 2) + 2))
+        self.print_header()
+
         print(self.generate_line_vertical())
         for row in self.table:
             print('|', *row, '|')
@@ -54,11 +74,11 @@ class Game(object):
         return position_x, position_y
     
     def generate_line_vertical(self):
-        return '_' * ((self.columns * 2) + 2)
+        return '_' * ((self.rows * 2) + 2)
 
-    def update_table(self, char):
+    def update_table(self, char, clean=False):
         try:
-            self.table[self.snake.position_y][self.snake.position_x] = char
+            self.table[self.snake.position_y][self.snake.position_x] = char if clean else self.snake.get_direction()
 
             if len(self.snake.parts) > 0:
                 self.update_position_parts(0, char)
@@ -73,12 +93,29 @@ class Game(object):
         self.update_position_parts(part + 1, char)
     
     def add_object(self, pos_x, pos_y, char):
-        self.table[pos_x][pos_y] = char
+        self.table[pos_y][pos_x] = char
+
+    def add_point_and_bonus(self):
+        self.points += 1
+        self.fruit = False
+
+        if not self.bonus_time and self.bonus < self.LIMIT_OF_BONUS:
+            self.bonus += 1
+
+        if self.bonus < self.LIMIT_OF_BONUS:
+            self.bonus_time = False
+            self.bar_of_bonus.append(self.CHAR_OF_WALL_FIELD)
+    
+    def decrement_bonus_time(self):
+        try:
+            self.bonus -= 1
+            self.bar_of_bonus.pop()
+        except IndexError as _:
+            self.bonus_time = False
 
     def add_new_part(self):
         self.snake.parts.append(SnakeBody(self.snake.position_x, self.snake.position_y))
-        self.points += 1
-        self.fruit = False
+        self.add_point_and_bonus()
 
     def change_positions_parts(self, part, last_pos_x, last_pos_y):
         if part > len(self.snake.parts) - 1:
@@ -112,19 +149,22 @@ class Game(object):
         new_x, new_y = self.calcultate_new_position(pos_x, pos_y)
 
         self.detect_object(new_x, new_y)
-        self.update_table(self.CHAR_OF_EMPTY_FIELD)
+        self.update_table(self.CHAR_OF_EMPTY_FIELD, clean=True)
         self.update_positions(new_x, new_y)
         self.update_table(self.CHAR_OF_BODY_FIELD)
 
-        if not self.fruit:
+        if self.bonus_time:
+            self.generate_random_object(self.CHAR_OF_FRUIT_FIELD)
+            self.decrement_bonus_time()
+        elif not self.fruit:
             char = random.choice((self.CHAR_OF_FRUIT_FIELD, self.CHAR_OF_BONUS_FIELD))
 
             self.generate_random_object(char)
             self.fruit = True
+
         if self.walls_active or self.hardocode_mode and self.points != 0 and (self.points % 2) == 0:
             self.generate_random_object(self.CHAR_OF_WALL_FIELD)
             self.walls_active = True
-        
         if self.points != 0 and (self.points % 2) != 0:
             self.walls_active = False
     
@@ -147,7 +187,7 @@ class Game(object):
     def generate_random_object(self, char):
         pos_x, pos_y = self.generate_snake()
 
-        if self.table[pos_x][pos_y] == self.CHAR_OF_EMPTY_FIELD:
+        if self.table[pos_y][pos_x] == self.CHAR_OF_EMPTY_FIELD:
            return self.add_object(pos_x, pos_y, char)
     
         self.generate_random_object(char)
@@ -157,25 +197,30 @@ class Game(object):
 
         if name == 'enter' and not self.started:
             self.started = True
-        if name == 'right' and self.direction_name != 'left':
+        elif name == 'space' and self.bonus >= self.LIMIT_OF_BONUS:
+            self.bonus_time = not self.bonus_time
+        elif name == 'right' and self.direction_name != 'left':
             self.change_direction(1, 0)
             self.direction_name = 'right'
-        if name == 'left' and self.direction_name != 'right':
+        elif name == 'left' and self.direction_name != 'right':
             self.change_direction(-1, 0)
             self.direction_name = 'left'
-        if name == 'up' and self.direction_name != 'down':
+        elif name == 'up' and self.direction_name != 'down':
             self.change_direction(0, -1)
             self.direction_name = 'up'
-        if name == 'down' and self.direction_name != 'up':
+        elif name == 'down' and self.direction_name != 'up':
             self.change_direction(0, 1)
             self.direction_name = 'down'
-        if name == 'esc':
+        elif name == 'esc':
             self.pause = not self.pause
+
+        # changhe direction of snake's head...
+        self.snake.change_direction(self.direction_name)
 
     def main_loop(self):
         try:
             while True:
-                time.sleep(.1)
+                time.sleep(self.speed)
                 os.system('clear')
 
                 if not self.pause and self.started:
@@ -184,12 +229,12 @@ class Game(object):
                     self.move_snake(move_x, move_y)
                     self.print()
                 elif self.pause:
-                    print(banners.PAUSE)
+                    print(Fore.GREEN + banners.PAUSE + Style.RESET_ALL)
                 else:
-                    print(banners.START_GAME)
+                    print(Fore.GREEN + banners.START_GAME + Style.RESET_ALL)
         except Exception as _:
-            print(banners.GAME_OVER.format(points=self.points))
-    
+            print(Fore.RED + banners.GAME_OVER.format(points=self.points) + Style.RESET_ALL)
+
     def keyboard_loop(self):
         listener = keyboard.Listener(on_press=self.verify_move)
         listener.start()
